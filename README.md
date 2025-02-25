@@ -62,27 +62,20 @@ export PATH=$PATH:/path/to/qai_hub/bin
 ### 1️⃣ Train & Convert Models
 Train the models and convert them to **TFLite & ONNX**:  
 ```bash
-python models/model_conversion.py  
+python fall_detection_pipeline.py  
 ```
   
-### 2️⃣ Deploy on Qualcomm AI Hub
-Upload and deploy the **optimized ONNX model**:  
+### 2️⃣ Deploy on Qualcomm AI Hub and Run On-Device Inference
+Upload and deploy the **optimized ONNX model** Perform real-time inference on a **Snapdragon device**:  
 ```bash
-python scripts/deploy_aihub.py  
+python inference_pipeline.py  
 ```
   
-### 3️⃣ Run On-Device Inference
-Perform real-time inference on a **Snapdragon device**:  
-```bash
-python scripts/run_inference.py  
-```
-  
-### 4️⃣ Streamlit App for Insights(FUTURE VERSION)
+### 3️⃣ Streamlit App for Insights(FUTURE VERSION)
 Launch the **caregiver dashboard**:  
 ```bash
 streamlit run app.py  
-```
-  
+
 ---
 
 ## 🎯 Model Training & Conversion
