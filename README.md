@@ -47,7 +47,7 @@ Epital ElderGuard is an **AI-powered fall detection system** designed for **elde
 ## 🛠 Installation
 Clone the repository and install dependencies:
 ```bash
-git clone https://github.com/yourusername/epital-elderguard.git  
+git clone https://github.com/petitmj/epital-elderguard.git  
 cd epital-elderguard  
 pip install -r requirements.txt  
 ```
@@ -77,7 +77,7 @@ Perform real-time inference on a **Snapdragon device**:
 python scripts/run_inference.py  
 ```
   
-### 4️⃣ Streamlit App for Insights
+### 4️⃣ Streamlit App for Insights(FUTURE VERSION)
 Launch the **caregiver dashboard**:  
 ```bash
 streamlit run app.py  
