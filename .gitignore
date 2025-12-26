@@ -1,0 +1,32 @@
+# Byte-compiled / cache files
+__pycache__/
+*.py[cod]
+*.pyd
+
+# Virtual environments & local settings
+.env
+.venv/
+venv/
+env/
+.python-version
+
+# IDE / editor folders
+.vscode/
+.idea/
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Data & model artifacts generated locally
+*.csv
+*.pkl
+*.h5
+*.onnx
+*.tflite
+*.joblib
+*.log
+
+# Build outputs
+build/
+dist/
+*.egg-info/

@@ -95,11 +95,13 @@ def train_hybrid_model(data, labels):
         # Autoencoder
         input_dim = X_train.shape[1]
         autoencoder = keras.Sequential([
-            layers.Dense(16, activation="relu", input_shape=(input_dim,)),
+            layers.Input(shape=(input_dim,)),
+            layers.Dense(16, activation="relu"),
             layers.Dense(8, activation="relu"),
             layers.Dense(16, activation="relu"),
             layers.Dense(input_dim, activation="linear"),
         ])
+
         autoencoder.compile(optimizer="adam", loss="mse")
         autoencoder.fit(X_train, X_train, epochs=50, batch_size=32, verbose=0)
 
@@ -112,7 +114,13 @@ def train_hybrid_model(data, labels):
         y_pred_hybrid = (y_pred_iso + y_pred_auto) >= 1
         y_pred_hybrid = y_pred_hybrid.astype(int)
 
-        precision, recall, f1, _ = precision_recall_fscore_support(y_test, y_pred_hybrid, average='binary')
+        unique_labels = np.unique(y_test)
+        average_mode = "binary" if len(unique_labels) <= 2 else "weighted"
+
+        precision, recall, f1, _ = precision_recall_fscore_support(
+            y_test, y_pred_hybrid, average=average_mode, zero_division=0
+        )
+
         logging.info(f"Hybrid Model - Precision: {precision:.4f}, Recall: {recall:.4f}, F1-Score: {f1:.4f}")
 
         # Save models
@@ -127,7 +135,7 @@ def train_hybrid_model(data, labels):
 
 if __name__ == "__main__":
     # Load and preprocess data
-    file_path = "data/processed_data.csv"
+    file_path = "fall_detection_dataset.csv"
     df = load_dataset(file_path)
     df_scaled, scaler = preprocess_data(df)
     df_pca, pca = apply_pca(df_scaled)
@@ -148,6 +156,10 @@ if __name__ == "__main__":
     evaluate_model(rf_model, X_test, y_test)
     save_model_artifacts(rf_model, scaler, label_encoder)
     
-    # Train and evaluate Hybrid Model
-    train_hybrid_model(X, y)
+   # Train hybrid model
+isolation_model, autoencoder, hybrid_scaler = train_hybrid_model(X, y)
+
+if isolation_model is not None:
     logging.info("✅ Hybrid Model training completed!")
+else:
+    logging.error("❌ Hybrid Model training failed!")

@@ -11,6 +11,7 @@ import qai_hub as hub
 from keras.saving import register_keras_serializable
 from keras.losses import MeanSquaredError
 import tf2onnx
+from collections.abc import Mapping, MutableMapping
 
 # ===========================
 # Load or Define Autoencoder

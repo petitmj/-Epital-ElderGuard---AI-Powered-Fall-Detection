@@ -1,0 +1,559 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# Fall Detection Pipeline - Training & Preprocessing\n",
+    "\n",
+    "This notebook implements a comprehensive machine learning pipeline for fall detection using sensor data. It includes:\n",
+    "- Data preprocessing and normalization\n",
+    "- Dimensionality reduction using PCA\n",
+    "- Random Forest classification\n",
+    "- Hybrid anomaly detection (Isolation Forest + Autoencoder)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 1. Import Required Libraries\n",
+    "\n",
+    "Import all necessary libraries for data manipulation, machine learning, deep learning, and visualization."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import pandas as pd\n",
+    "import numpy as np\n",
+    "import logging\n",
+    "import joblib\n",
+    "import matplotlib.pyplot as plt\n",
+    "import seaborn as sns\n",
+    "from sklearn.model_selection import train_test_split\n",
+    "from sklearn.preprocessing import StandardScaler, LabelEncoder\n",
+    "from sklearn.ensemble import RandomForestClassifier, IsolationForest\n",
+    "from sklearn.decomposition import PCA\n",
+    "from sklearn.metrics import accuracy_score, precision_recall_fscore_support\n",
+    "import tensorflow as tf\n",
+    "from tensorflow import keras\n",
+    "from tensorflow.keras import layers\n",
+    "\n",
+    "# Configure logging to track pipeline execution\n",
+    "logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 2. Define Data Loading Function\n",
+    "\n",
+    "This function loads the fall detection dataset from a CSV file. The dataset should contain sensor readings (accelerometer, gyroscope, etc.) with activity labels."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def load_dataset(filepath):\n",
+    "    \"\"\"\n",
+    "    Load fall detection dataset from CSV file.\n",
+    "    \n",
+    "    Args:\n",
+    "        filepath: Path to the CSV file containing sensor data and labels\n",
+    "    \n",
+    "    Returns:\n",
+    "        DataFrame with sensor features and activity labels\n",
+    "    \"\"\"\n",
+    "    df = pd.read_csv(filepath)\n",
+    "    return df"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 3. Define Data Preprocessing Function\n",
+    "\n",
+    "This function performs essential preprocessing steps:\n",
+    "- Checks for missing values\n",
+    "- Analyzes class distribution to identify imbalances\n",
+    "- Applies StandardScaler normalization to ensure all features have zero mean and unit variance\n",
+    "- This normalization is crucial for distance-based algorithms and neural networks"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def preprocess_data(df):\n",
+    "    \"\"\"\n",
+    "    Preprocess the dataset by checking data quality and normalizing features.\n",
+    "    \n",
+    "    Args:\n",
+    "        df: Raw dataframe with sensor readings and labels\n",
+    "    \n",
+    "    Returns:\n",
+    "        df_scaled: Normalized dataframe with scaled features\n",
+    "        scaler: Fitted StandardScaler object for later use in inference\n",
+    "    \"\"\"\n",
+    "    # Check for missing values\n",
+    "    missing_values = df.isnull().sum().sum()\n",
+    "    logging.info(f\"Total missing values: {missing_values}\")\n",
+    "    \n",
+    "    # Check class distribution to identify potential class imbalance\n",
+    "    class_counts = df['label'].value_counts()\n",
+    "    logging.info(f\"Class Distribution:\\n{class_counts}\")\n",
+    "    \n",
+    "    # Normalize Data using Standard Scaling (z-score normalization)\n",
+    "    scaler = StandardScaler()\n",
+    "    features = df.iloc[:, 1:]  # Exclude label column (assumed to be first column)\n",
+    "    scaled_features = scaler.fit_transform(features)\n",
+    "    \n",
+    "    # Convert back to DataFrame for easier manipulation\n",
+    "    df_scaled = pd.DataFrame(scaled_features, columns=df.columns[1:])\n",
+    "    df_scaled['label'] = df['label']  # Retain original labels\n",
+    "    \n",
+    "    return df_scaled, scaler"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 4. Define PCA Dimensionality Reduction Function\n",
+    "\n",
+    "Principal Component Analysis (PCA) reduces feature dimensionality while retaining 95% of the variance. This:\n",
+    "- Reduces computational cost\n",
+    "- Removes multicollinearity\n",
+    "- Helps prevent overfitting\n",
+    "- Speeds up model training"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def apply_pca(df_scaled):\n",
+    "    \"\"\"\n",
+    "    Apply PCA for dimensionality reduction while retaining 95% of variance.\n",
+    "    \n",
+    "    Args:\n",
+    "        df_scaled: Normalized dataframe with scaled features\n",
+    "    \n",
+    "    Returns:\n",
+    "        df_pca: Dataframe with principal components and labels\n",
+    "        pca: Fitted PCA object for transforming new data\n",
+    "    \"\"\"\n",
+    "    # Feature Selection using PCA\n",
+    "    pca = PCA(n_components=0.95)  # Retain 95% of variance\n",
+    "    principal_components = pca.fit_transform(df_scaled.iloc[:, :-1])  # Exclude label\n",
+    "    \n",
+    "    # Convert PCA results into a DataFrame\n",
+    "    df_pca = pd.DataFrame(principal_components)\n",
+    "    df_pca['label'] = df_scaled['label']\n",
+    "    \n",
+    "    logging.info(f\"Original feature count: {df_scaled.shape[1] - 1}\")\n",
+    "    logging.info(f\"Reduced feature count after PCA: {df_pca.shape[1] - 1}\")\n",
+    "    \n",
+    "    return df_pca, pca"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 5. Define Visualization Function\n",
+    "\n",
+    "Visualize the distribution of different activity classes to understand class balance and potential biases in the dataset."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def visualize_class_distribution(class_counts):\n",
+    "    \"\"\"\n",
+    "    Create a bar plot showing the distribution of activity classes.\n",
+    "    \n",
+    "    Args:\n",
+    "        class_counts: Series containing counts for each activity class\n",
+    "    \"\"\"\n",
+    "    plt.figure(figsize=(8, 5))\n",
+    "    sns.barplot(x=class_counts.index, y=class_counts.values, palette=\"viridis\")\n",
+    "    plt.title(\"Class Distribution\")\n",
+    "    plt.xlabel(\"Activity Type\")\n",
+    "    plt.ylabel(\"Count\")\n",
+    "    plt.show()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 6. Define Random Forest Training Function\n",
+    "\n",
+    "Random Forest is an ensemble learning method that creates multiple decision trees and combines their predictions. It's robust to overfitting and handles high-dimensional data well."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def train_random_forest(X_train, y_train):\n",
+    "    \"\"\"\n",
+    "    Train a Random Forest classifier for activity classification.\n",
+    "    \n",
+    "    Args:\n",
+    "        X_train: Training features\n",
+    "        y_train: Training labels\n",
+    "    \n",
+    "    Returns:\n",
+    "        model: Trained RandomForestClassifier\n",
+    "    \"\"\"\n",
+    "    model = RandomForestClassifier(n_estimators=100, random_state=42)\n",
+    "    model.fit(X_train, y_train)\n",
+    "    return model"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 7. Define Model Evaluation Function\n",
+    "\n",
+    "Evaluate the trained model on test data and compute accuracy metrics."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def evaluate_model(model, X_test, y_test):\n",
+    "    \"\"\"\n",
+    "    Evaluate model performance on test data.\n",
+    "    \n",
+    "    Args:\n",
+    "        model: Trained classifier\n",
+    "        X_test: Test features\n",
+    "        y_test: True test labels\n",
+    "    \n",
+    "    Returns:\n",
+    "        accuracy: Model accuracy score\n",
+    "    \"\"\"\n",
+    "    y_pred = model.predict(X_test)\n",
+    "    accuracy = accuracy_score(y_test, y_pred)\n",
+    "    logging.info(f\"Model Accuracy: {accuracy:.4f}\")\n",
+    "    return accuracy"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 8. Define Model Saving Function\n",
+    "\n",
+    "Save the trained model and preprocessing objects for later use in production/inference."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def save_model_artifacts(model, scaler, label_encoder):\n",
+    "    \"\"\"\n",
+    "    Save trained model and preprocessing objects to disk.\n",
+    "    \n",
+    "    Args:\n",
+    "        model: Trained classifier\n",
+    "        scaler: Fitted StandardScaler\n",
+    "        label_encoder: Fitted LabelEncoder\n",
+    "    \"\"\"\n",
+    "    joblib.dump(model, \"fall_detection_model.pkl\")\n",
+    "    joblib.dump(scaler, \"scaler.pkl\")\n",
+    "    joblib.dump(label_encoder, \"label_encoder.pkl\")\n",
+    "    logging.info(\"✅ Model and encoders saved successfully!\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 9. Define Hybrid Anomaly Detection Model\n",
+    "\n",
+    "This advanced function combines two anomaly detection approaches:\n",
+    "- **Isolation Forest**: Identifies anomalies by isolating observations in tree structures\n",
+    "- **Autoencoder**: Neural network that learns to reconstruct normal patterns; poor reconstruction indicates anomalies\n",
+    "\n",
+    "The hybrid approach uses majority voting to combine predictions, improving robustness."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def train_hybrid_model(data, labels):\n",
+    "    \"\"\"\n",
+    "    Train a hybrid anomaly detection model combining Isolation Forest and Autoencoder.\n",
+    "    \n",
+    "    Args:\n",
+    "        data: Feature data\n",
+    "        labels: Binary labels (0=normal, 1=fall/anomaly)\n",
+    "    \n",
+    "    Returns:\n",
+    "        isolation_model: Trained Isolation Forest\n",
+    "        autoencoder: Trained autoencoder neural network\n",
+    "        scaler: Fitted scaler\n",
+    "    \"\"\"\n",
+    "    try:\n",
+    "        # Scale data for neural network\n",
+    "        scaler = StandardScaler()\n",
+    "        scaled_data = scaler.fit_transform(data)\n",
+    "        X_train, X_test, y_train, y_test = train_test_split(\n",
+    "            scaled_data, labels, test_size=0.2, random_state=42\n",
+    "        )\n",
+    "\n",
+    "        # Isolation Forest: Tree-based anomaly detection\n",
+    "        isolation_model = IsolationForest(contamination=0.05, random_state=42)\n",
+    "        isolation_model.fit(X_train)\n",
+    "        y_pred_iso = isolation_model.predict(X_test)\n",
+    "        y_pred_iso = np.where(y_pred_iso == -1, 1, 0)  # Convert -1 (anomaly) to 1\n",
+    "\n",
+    "        # Autoencoder: Neural network-based anomaly detection\n",
+    "        input_dim = X_train.shape[1]\n",
+    "        autoencoder = keras.Sequential([\n",
+    "            layers.Dense(16, activation=\"relu\", input_shape=(input_dim,)),\n",
+    "            layers.Dense(8, activation=\"relu\"),  # Bottleneck layer\n",
+    "            layers.Dense(16, activation=\"relu\"),\n",
+    "            layers.Dense(input_dim, activation=\"linear\"),  # Reconstruction layer\n",
+    "        ])\n",
+    "        autoencoder.compile(optimizer=\"adam\", loss=\"mse\")\n",
+    "        autoencoder.fit(X_train, X_train, epochs=50, batch_size=32, verbose=0)\n",
+    "\n",
+    "        # Detect anomalies based on reconstruction error\n",
+    "        reconstructions = autoencoder.predict(X_test)\n",
+    "        mse = np.mean(np.power(X_test - reconstructions, 2), axis=1)\n",
+    "        threshold = np.percentile(mse, 95)  # Top 5% errors are anomalies\n",
+    "        y_pred_auto = (mse > threshold).astype(int)\n",
+    "\n",
+    "        # Hybrid Prediction: Majority voting between both models\n",
+    "        y_pred_hybrid = (y_pred_iso + y_pred_auto) >= 1\n",
+    "        y_pred_hybrid = y_pred_hybrid.astype(int)\n",
+    "\n",
+    "        # Evaluate hybrid model\n",
+    "        precision, recall, f1, _ = precision_recall_fscore_support(\n",
+    "            y_test, y_pred_hybrid, average='binary'\n",
+    "        )\n",
+    "        logging.info(f\"Hybrid Model - Precision: {precision:.4f}, Recall: {recall:.4f}, F1-Score: {f1:.4f}\")\n",
+    "\n",
+    "        # Save models for deployment\n",
+    "        joblib.dump(isolation_model, \"isolation_forest.pkl\")\n",
+    "        joblib.dump(scaler, \"scaler.pkl\")\n",
+    "        autoencoder.save(\"autoencoder.h5\")\n",
+    "\n",
+    "        return isolation_model, autoencoder, scaler\n",
+    "    except Exception as e:\n",
+    "        logging.error(f\"Error training Hybrid Model: {e}\")\n",
+    "        return None, None, None"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 10. Load and Preprocess Dataset\n",
+    "\n",
+    "Execute the data loading and preprocessing pipeline. Update the file path to point to your actual dataset."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Load dataset\n",
+    "file_path = \"data/processed_data.csv\"  # Update this path to your dataset location\n",
+    "df = load_dataset(file_path)\n",
+    "\n",
+    "# Display basic information about the dataset\n",
+    "print(f\"Dataset shape: {df.shape}\")\n",
+    "print(f\"\\nFirst few rows:\\n{df.head()}\")\n",
+    "print(f\"\\nColumn names:\\n{df.columns.tolist()}\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 11. Apply Preprocessing and PCA\n",
+    "\n",
+    "Normalize the features and reduce dimensionality using PCA."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Preprocess data\n",
+    "df_scaled, scaler = preprocess_data(df)\n",
+    "\n",
+    "# Apply PCA for dimensionality reduction\n",
+    "df_pca, pca = apply_pca(df_scaled)\n",
+    "\n",
+    "# Save preprocessed data\n",
+    "df_pca.to_csv(\"processed_data.csv\", index=False)\n",
+    "logging.info(\"✅ Preprocessed data saved as 'processed_data.csv'\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 12. Encode Labels and Split Data\n",
+    "\n",
+    "Convert text labels to numerical format and split data into training and testing sets."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Encode categorical labels to numerical values\n",
+    "label_encoder = LabelEncoder()\n",
+    "df_pca['label'] = label_encoder.fit_transform(df_pca['label'])\n",
+    "\n",
+    "# Split dataset into features and labels\n",
+    "X = df_pca.drop(columns=[\"label\"])\n",
+    "y = df_pca[\"label\"]\n",
+    "\n",
+    "# Split into training (80%) and testing (20%) sets\n",
+    "X_train, X_test, y_train, y_test = train_test_split(\n",
+    "    X, y, test_size=0.2, random_state=42\n",
+    ")\n",
+    "\n",
+    "print(f\"Training samples: {X_train.shape[0]}\")\n",
+    "print(f\"Testing samples: {X_test.shape[0]}\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 13. Train and Evaluate Random Forest Model\n",
+    "\n",
+    "Train the Random Forest classifier and evaluate its performance on the test set."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Train Random Forest model\n",
+    "rf_model = train_random_forest(X_train, y_train)\n",
+    "\n",
+    "# Evaluate model performance\n",
+    "accuracy = evaluate_model(rf_model, X_test, y_test)\n",
+    "\n",
+    "# Save model and preprocessing objects\n",
+    "save_model_artifacts(rf_model, scaler, label_encoder)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 14. Train and Evaluate Hybrid Anomaly Detection Model\n",
+    "\n",
+    "Train the hybrid model combining Isolation Forest and Autoencoder for improved anomaly detection."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Train hybrid model\n",
+    "isolation_model, autoencoder, hybrid_scaler = train_hybrid_model(X, y)\n",
+    "\n",
+    "if isolation_model is not None:\n",
+    "    logging.info(\"✅ Hybrid Model training completed!\")\n",
+    "else:\n",
+    "    logging.error(\"❌ Hybrid Model training failed!\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## 15. Summary and Next Steps\n",
+    "\n",
+    "**Models Trained:**\n",
+    "1. Random Forest Classifier - For multi-class activity classification\n",
+    "2. Hybrid Anomaly Detector - Combining Isolation Forest and Autoencoder\n",
+    "\n",
+    "**Saved Artifacts:**\n",
+    "- `fall_detection_model.pkl` - Random Forest model\n",
+    "- `isolation_forest.pkl` - Isolation Forest model\n",
+    "- `autoencoder.h5` - Autoencoder neural network\n",
+    "- `scaler.pkl` - Feature scaler\n",
+    "- `label_encoder.pkl` - Label encoder\n",
+    "- `processed_data.csv` - Preprocessed dataset\n",
+    "\n",
+    "**Next Steps:**\n",
+    "- Use the inference pipeline notebook to convert models for mobile deployment\n",
+    "- Test models on new sensor data\n",
+    "- Deploy to edge devices for real-time fall detection"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.8.0"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 4
+}
