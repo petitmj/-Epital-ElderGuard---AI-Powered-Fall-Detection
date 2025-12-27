@@ -10,6 +10,7 @@
 - [Key Features](#key-features)
 - [Tech Stack](#tech-stack)
 - [Quick Start](#quick-start)
+- [Streamlit Demo](#streamlit-demo)
 - [API Endpoints](#api-endpoints)
 - [Deployment](#deployment)
 - [Project Structure](#project-structure)
@@ -50,10 +51,35 @@ cd epital-elderguard
 python -m venv .venv && .\.venv\Scripts\activate  # Windows
 # source .venv/bin/activate                      # macOS/Linux
 pip install -r requirements.txt
+```
+
+### Run the FastAPI service
+
+```bash
 uvicorn care_assist_api:app --reload
 ```
 
-The service boots at `http://127.0.0.1:8000`. Visit `/docs` for the interactive Swagger UI.
+Visit `http://127.0.0.1:8000/docs` for the interactive Swagger UI.
+
+### Launch the Streamlit UI
+
+```bash
+streamlit run streamlit_app.py
+```
+
+Streamlit automatically opens at `http://localhost:8501` with two tabs that wrap the same helper functions as the API.
+
+---
+
+## Streamlit Demo
+
+- **Care Guidance tab:** enter a topic/audience to surface health checklists and routines.
+- **Emergency Resources tab:** extend DuckDuckGo search for “care for elderly patients” and optionally layer in keywords (e.g., *fall clinics Africa*, *memory care Germany*, *telehealth rural*).
+- **Simulated Fall Feed tab:** replays accelerometer + gyroscope readings from `sample_data/fall_readings.csv`, mimicking a phone streaming telemetry to the dashboard in real time. Replace that CSV with your own dataset (same columns) to customize the stream.
+- **No backend setup required:** Streamlit calls the DuckDuckGo helper module directly, making it ideal for portfolio visitors who just want to click around.
+- **Consistent cards:** results reuse the InfoCard schema (title, snippet, URL, metadata) so the UI mirrors the FastAPI responses.
+
+> Tip: deploy the Streamlit app on Streamlit Community Cloud or Hugging Face Spaces and embed the URL on your portfolio for instant interactivity.
 
 ---
 
@@ -63,7 +89,7 @@ The service boots at `http://127.0.0.1:8000`. Visit `/docs` for the interactive 
 |--------|------|-------------|
 | `GET`  | `/`  | Service metadata & navigation hints |
 | `POST` | `/care-info` | Provide a caregiving topic to receive curated health guidance cards |
-| `POST` | `/emergency-facilities` | Provide a location query to surface nearby emergency resources |
+| `POST` | `/emergency-facilities` | Extend DuckDuckGo’s elder-care search with optional keywords/region bias |
 
 ### Example payloads
 
@@ -105,12 +131,14 @@ Each endpoint returns normalized `InfoCard` objects: `{ "title", "snippet", "url
 
 ---
 
-## 🗂️ Project Structure
+## Project Structure
 
 ```text
 .
 ├── care_assist_api.py      # FastAPI application exposing caregiver endpoints
 ├── duckduckgo_service.py   # DuckDuckGo Instant Answer client + InfoCard helpers
+├── streamlit_app.py        # Zero-config UI for portfolio demos
+├── sample_data/            # Simulated accelerometer readings for the live feed
 ├── requirements.txt        # Minimal runtime dependencies
 ├── LICENSE
 ├── .gitignore              # Keeps notebooks, datasets, and models out of Git
